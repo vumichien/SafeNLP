@@ -6,7 +6,7 @@ Utility fuctions
 
 import argparse
 import torch
-from transformers import AutoConfig, AutoModelForMaskedLM, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForMaskedLM, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -31,24 +31,21 @@ def load_tokenizer_and_model(args, from_tf=False):
     '''
     Load tokenizer and model to evaluate.
     '''
-
-    pretrained_weights = args.model
-    if args.config:
-        config = AutoConfig.from_pretrained(args.config)
-    else:
-        config = None
-    tokenizer = AutoTokenizer.from_pretrained(pretrained_weights) 
-    # Load Masked Language Model Head
-    if args.lmHead == 'mlm':
-        model = AutoModelForMaskedLM.from_pretrained(pretrained_weights,
-                                                     from_tf=from_tf, config=config)        
     # load Causal Language Model Head
-    else:
-        model = AutoModelForCausalLM.from_pretrained(pretrained_weights,
-                                                     from_tf=from_tf, config=config)
+    pretrained_weights = args.model
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=False,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=torch.float16
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_weights)
+
+    model = AutoModelForCausalLM.from_pretrained(pretrained_weights, quantization_config=bnb_config,
+                      low_cpu_mem_usage=True, device_map={"":0})
 
     model = model.eval()
-    if torch.cuda.is_available():
-        model.to('cuda')
 
     return tokenizer, model
